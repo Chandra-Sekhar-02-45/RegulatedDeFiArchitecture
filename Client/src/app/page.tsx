@@ -1,145 +1,97 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { AccountSummaryCard } from "@/components/AccountSummaryCard";
-import { CertificationBadge } from "@/components/CertificationBadge";
-import { NetworkWarning } from "@/components/NetworkWarning";
-import { SectionCard } from "@/components/SectionCard";
-import { TransactionAlerts } from "@/components/TransactionAlerts";
-import { TransferForm } from "@/components/TransferForm";
-import { WalletConnectCard } from "@/components/WalletConnectCard";
-import { readCertificationStatus, submitLargeTransfer, submitSmallTransfer } from "@/lib/contracts";
-import { useWallet } from "@/hooks/useWallet";
+import { motion } from "framer-motion";
+import { Header } from "@/components/layout/Header";
+import { PremiumButton } from "@/components/ui/PremiumButton";
+import { ArrowRight, ShieldCheck, Link2 } from "lucide-react";
 
-type TxStatus = "idle" | "pending" | "success" | "error";
-
-export default function DashboardPage() {
-  const wallet = useWallet();
-  const [isCertified, setIsCertified] = useState<boolean | null>(null);
-  const [checkingCertification, setCheckingCertification] = useState(false);
-  const [txStatus, setTxStatus] = useState<TxStatus>("idle");
-  const [txMessage, setTxMessage] = useState<string | undefined>();
-  const [readError, setReadError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const run = async () => {
-      if (!wallet.account || !wallet.isCorrectNetwork) {
-        setIsCertified(null);
-        return;
-      }
-      try {
-        setCheckingCertification(true);
-        setReadError(null);
-        const certified = await readCertificationStatus(wallet.account);
-        setIsCertified(Boolean(certified));
-      } catch (err: any) {
-        setReadError(err?.message ?? "Could not read certification status");
-      } finally {
-        setCheckingCertification(false);
-      }
-    };
-    run();
-  }, [wallet.account, wallet.isCorrectNetwork]);
-
-  const handleSmallTransfer = async ({ to, amount }: { to: string; amount: string }) => {
-    setTxStatus("pending");
-    setTxMessage("Submitting small transfer...");
-    try {
-      await submitSmallTransfer(to, amount);
-      setTxStatus("success");
-      setTxMessage("Small transfer confirmed.");
-    } catch (err: any) {
-      setTxStatus("error");
-      setTxMessage(err?.message ?? "Small transfer failed.");
-    }
-  };
-
-  const handleLargeTransfer = async ({ to, amount }: { to: string; amount: string }) => {
-    if (!isCertified) {
-      setTxStatus("error");
-      setTxMessage("Certification required for large transfers.");
-      return;
-    }
-
-    setTxStatus("pending");
-    setTxMessage("Submitting large transfer with compliance validation...");
-    try {
-      await submitLargeTransfer(to, amount);
-      setTxStatus("success");
-      setTxMessage("Large transfer confirmed.");
-    } catch (err: any) {
-      setTxStatus("error");
-      setTxMessage(err?.message ?? "Large transfer failed.");
-    }
-  };
-
-  const connectivityDisabledReason = !wallet.account
-    ? "Connect wallet"
-    : !wallet.isCorrectNetwork
-      ? "Switch to required network"
-      : null;
-
-  const largeDisabledReason = connectivityDisabledReason ?? (!isCertified ? "Certification required" : null);
-
+export default function Home() {
   return (
-    <main className="container-shell flex flex-col gap-6 pb-12">
-      <header className="flex flex-col gap-2">
-        <p className="text-sm uppercase tracking-[0.4em] text-[var(--text-muted)]">Hybrid banking</p>
-        <h1 className="text-3xl sm:text-4xl font-semibold">Regulated DeFi Architecture</h1>
-        <p className="text-[var(--text-muted)] max-w-2xl">
-          Compliance-aware decentralized banking: small transfers for everyone, certified large transfers
-          enforced by smart contracts.
-        </p>
-      </header>
+    <main className="relative min-h-screen overflow-hidden bg-app-black flex flex-col items-center justify-center selection:bg-app-white selection:text-app-black">
+      {/* Header */}
+      <Header />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 flex flex-col gap-4">
-          <WalletConnectCard wallet={wallet} />
-          {!wallet.isCorrectNetwork && wallet.account ? (
-            <NetworkWarning onSwitch={wallet.switchNetwork} />
-          ) : null}
-          <AccountSummaryCard
-            wallet={wallet}
-            certificationBadge={<CertificationBadge certified={isCertified} loading={checkingCertification} />}
-          />
-        </div>
-
-        <div className="flex flex-col gap-4">
-          <SectionCard title="Notifications" subtitle="Transaction lifecycle">
-            <TransactionAlerts status={txStatus} message={txMessage} />
-            {readError ? <div className="alert error mt-3">{readError}</div> : null}
-            {!wallet.hasProvider ? (
-              <div className="alert info mt-3">Install MetaMask to continue.</div>
-            ) : null}
-          </SectionCard>
-        </div>
+      {/* Background Effects */}
+      <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.03)_0%,transparent_60%)] opacity-50 blur-3xl animate-[pulse_10s_infinite_alternate]" />
+        <div className="absolute inset-0 bg-[url('/noise.svg')] opacity-[0.015]" />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <TransferForm
-          title="Small transfer"
-          description="Fast-path transfers allowed for all users"
-          buttonLabel="Send small transfer"
-          disabledReason={connectivityDisabledReason}
-          onSubmit={handleSmallTransfer}
-          highlight="info"
-          footer={<p className="text-xs text-[var(--text-muted)]">Recommended for &lt;$1k equivalent.</p>}
-        />
+      {/* Hero Content */}
+      <div className="relative z-10 max-w-5xl mx-auto px-6 pt-32 pb-20 text-center flex flex-col items-center">
+        <motion.div
+          initial={{ opacity: 0, y: 20, filter: "blur(10px)" }}
+          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+          transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+          className="inline-flex items-center gap-2 px-4 py-2 border border-surface-300 rounded-full bg-surface-100/50 backdrop-blur-md mb-8 shadow-sm"
+        >
+          <div className="w-2 h-2 rounded-full bg-app-white shadow-[0_0_8px_rgba(255,255,255,0.8)] animate-pulse" />
+          <span className="text-xs font-mono uppercase tracking-widest text-text-secondary">
+            Government Certified Decentralized Network
+          </span>
+        </motion.div>
 
-        <TransferForm
-          title="Large transfer"
-          description="Enforces certification via IdentityRegistry"
-          buttonLabel="Send large transfer"
-          disabledReason={largeDisabledReason}
-          onSubmit={handleLargeTransfer}
-          highlight={largeDisabledReason ? "error" : "warn"}
-          footer={
-            <div className="text-xs text-[var(--text-muted)] flex flex-col gap-1">
-              <span>Requires certification + correct network.</span>
-              <span>Authority can certify accounts in the dashboard.</span>
-            </div>
-          }
-        />
+        <motion.h1
+          initial={{ opacity: 0, y: 20, filter: "blur(10px)" }}
+          animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+          transition={{ duration: 0.9, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+          className="text-6xl md:text-8xl font-bold tracking-tighter text-app-white leading-[1.05] mb-6 max-w-4xl"
+        >
+          Institutional DeFi.
+          <br />
+          <span className="text-transparent bg-clip-text bg-gradient-to-b from-app-white via-text-secondary to-surface-300">
+            Regulated. Cryptographic.
+          </span>
+        </motion.h1>
+
+        <motion.p
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.9, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+          className="text-lg md:text-xl text-text-secondary max-w-2xl mb-12 font-medium leading-relaxed"
+        >
+          The first hybrid decentralized banking protocol operating securely within federal compliance frameworks. Execute high-volume transactions with cryptographic certainty.
+        </motion.p>
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+          className="flex flex-col sm:flex-row items-center gap-4"
+        >
+          <PremiumButton size="lg" variant="primary">
+            Enter Dashboard <ArrowRight className="w-5 h-5 ml-2" />
+          </PremiumButton>
+          <PremiumButton size="lg" variant="ghost" className="hidden sm:inline-flex">
+            View Audit Reports <ShieldCheck className="w-5 h-5 ml-2 text-text-tertiary" />
+          </PremiumButton>
+        </motion.div>
+      </div>
+
+      {/* Geometric Floating Elements */}
+      <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden perspective-1000">
+        <motion.div
+          initial={{ y: 0, rotate: 0 }}
+          animate={{ y: [-20, 20, -20], rotate: [0, 5, 0] }}
+          transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+          className="absolute top-[20%] left-[10%] opacity-20"
+        >
+          <svg width="120" height="120" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <polygon points="50,10 90,30 90,70 50,90 10,70 10,30" stroke="#FAFAFA" strokeWidth="1" fill="transparent" />
+          </svg>
+        </motion.div>
+
+        <motion.div
+          initial={{ y: 0, rotate: 0 }}
+          animate={{ y: [20, -30, 20], rotate: [0, -10, 0] }}
+          transition={{ duration: 12, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+          className="absolute bottom-[15%] right-[15%] opacity-10"
+        >
+          <svg width="160" height="160" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="50" r="40" stroke="#FAFAFA" strokeWidth="0.5" strokeDasharray="4 4" fill="transparent" />
+            <rect x="25" y="25" width="50" height="50" stroke="#FAFAFA" strokeWidth="1" fill="transparent" />
+          </svg>
+        </motion.div>
       </div>
     </main>
   );
