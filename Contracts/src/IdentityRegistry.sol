@@ -15,17 +15,31 @@ contract IdentityRegistry {
     }
 
     mapping(address => User) public users;
+    mapping(address => uint256) public nonces;
 
     address public governmentSigner;
+
+    event UserVerified(address indexed user, uint256 nonce);
 
     constructor(address _governmentSigner) {
         governmentSigner = _governmentSigner;
     }
 
+    /**
+     * @dev Simple helper to get the hash that the Gov API signs.
+     */
+    function getMessageHash(
+        address _user,
+        uint256 _nonce
+    ) public pure returns (bytes32) {
+        return keccak256(abi.encodePacked(_user, _nonce));
+    }
+
     function register(bytes memory signature) external {
         require(!users[msg.sender].isVerified, "Already verified");
 
-        bytes32 messageHash = keccak256(abi.encodePacked(msg.sender));
+        uint256 currentNonce = nonces[msg.sender];
+        bytes32 messageHash = getMessageHash(msg.sender, currentNonce);
         bytes32 ethSignedMessageHash = messageHash.toEthSignedMessageHash();
 
         address recoveredSigner = ethSignedMessageHash.recover(signature);
@@ -36,6 +50,9 @@ contract IdentityRegistry {
         );
 
         users[msg.sender].isVerified = true;
+        nonces[msg.sender]++;
+
+        emit UserVerified(msg.sender, currentNonce);
     }
 
     function isUserVerified(address user) external view returns (bool) {
