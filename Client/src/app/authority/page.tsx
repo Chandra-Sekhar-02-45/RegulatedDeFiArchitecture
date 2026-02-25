@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/Header";
 import { Search, Filter, MoreHorizontal, CheckCircle2, XCircle, ShieldAlert } from "lucide-react";
 
@@ -13,7 +14,20 @@ const MOCK_USERS = [
 ];
 
 export default function AuthorityDashboard() {
+  const router = useRouter();
   const [selectedUser, setSelectedUser] = useState<typeof MOCK_USERS[0] | null>(null);
+
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+    const isAuth = localStorage.getItem("isAuthenticated");
+    if (!isAuth) {
+      router.push("/login");
+    }
+  }, [router]);
+
+  if (!isMounted) return null;
 
   return (
     <main className="min-h-screen bg-app-black pt-28 pb-10 flex flex-col selection:bg-app-white selection:text-app-black">
@@ -69,8 +83,8 @@ export default function AuthorityDashboard() {
                   <td className="py-4 px-6">
                     <div className="flex items-center justify-between">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${user.status === 'Certified' ? 'bg-app-white/10 border-app-white/20 text-app-white' :
-                          user.status === 'Flagged' ? 'bg-red-500/10 border-red-500/20 text-red-500' :
-                            'bg-surface-300/30 border-surface-300 flex-text-secondary'
+                        user.status === 'Flagged' ? 'bg-red-500/10 border-red-500/20 text-red-500' :
+                          'bg-surface-300/30 border-surface-300 flex-text-secondary'
                         }`}>
                         {user.status === 'Certified' && <CheckCircle2 className="w-3 h-3" />}
                         {user.status === 'Flagged' && <ShieldAlert className="w-3 h-3" />}

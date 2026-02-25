@@ -17,6 +17,7 @@ export type WalletConnectionState = {
   isConnecting: boolean;
   error?: string;
   isAuthority: boolean;
+  isModerator: boolean;
   isCorrectNetwork: boolean;
   connectWallet: () => Promise<void>;
   disconnect: () => void;
@@ -118,6 +119,7 @@ export function useWallet(): WalletConnectionState {
     isConnecting,
     error,
     isAuthority: flags.isAuthority,
+    isModerator: flags.isModerator,
     isCorrectNetwork: flags.isCorrectNetwork,
     connectWallet,
     disconnect,

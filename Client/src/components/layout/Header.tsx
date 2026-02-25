@@ -2,8 +2,10 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
 import { PremiumButton } from "@/components/ui/PremiumButton";
-import { useWeb3 } from "@/context/Web3Context";
+import { useWallet } from "@/hooks/useWallet";
 
 const Logo = () => {
     return (
@@ -75,7 +77,20 @@ const Logo = () => {
 };
 
 export function Header() {
-    const { account, connectWallet, isConnecting, disconnectWallet } = useWeb3();
+    const { account, connectWallet, isConnecting, disconnect } = useWallet();
+    const router = useRouter();
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+    useEffect(() => {
+        setIsAuthenticated(localStorage.getItem("isAuthenticated") === "true");
+    }, []);
+
+    const handleSignOut = () => {
+        localStorage.removeItem("isAuthenticated");
+        setIsAuthenticated(false);
+        disconnect();
+        router.push("/login");
+    };
 
     const formatAddress = (addr: string) => {
         return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
@@ -106,12 +121,17 @@ export function Header() {
                 </nav>
 
                 <div className="flex items-center gap-4">
+                    {isAuthenticated ? (
+                        <PremiumButton size="sm" variant="ghost" onClick={handleSignOut} className="text-red-400 hover:text-red-300 hover:bg-red-500/10 border-red-500/20 mr-2">
+                            Sign Out
+                        </PremiumButton>
+                    ) : null}
                     {account ? (
                         <div className="flex items-center gap-3">
                             <span className="text-sm font-mono text-app-white bg-surface-200 px-3 py-1.5 rounded-md border border-surface-300 shadow-inner">
                                 {formatAddress(account)}
                             </span>
-                            <PremiumButton size="sm" variant="ghost" onClick={disconnectWallet}>
+                            <PremiumButton size="sm" variant="ghost" onClick={disconnect}>
                                 Disconnect
                             </PremiumButton>
                         </div>

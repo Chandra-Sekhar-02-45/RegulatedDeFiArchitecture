@@ -1,4 +1,11 @@
-import { BrowserProvider, Contract, Eip1193Provider, JsonRpcSigner, parseEther } from "ethers";
+import {
+  BrowserProvider,
+  Contract,
+  Eip1193Provider,
+  JsonRpcSigner,
+  formatUnits,
+  parseUnits,
+} from "ethers";
 
 export type EthereumLike = Eip1193Provider & {
   on?: (event: string, handler: (...args: unknown[]) => void) => void;
@@ -13,19 +20,34 @@ declare global {
 
 const REQUIRED_CHAIN_ID = Number(process.env.NEXT_PUBLIC_REQUIRED_CHAIN_ID ?? 31337);
 const AUTHORITY_ADDRESS = (process.env.NEXT_PUBLIC_AUTHORITY_ADDRESS ?? "").toLowerCase();
+const MODERATOR_ADDRESS = (process.env.NEXT_PUBLIC_MODERATOR_ADDRESS ?? "").toLowerCase();
 const IDENTITY_REGISTRY_ADDRESS =
   process.env.NEXT_PUBLIC_IDENTITY_REGISTRY_ADDRESS ?? "0x0000000000000000000000000000000000000000";
-const HYBRID_BANK_ADDRESS =
-  process.env.NEXT_PUBLIC_HYBRID_BANK_ADDRESS ?? "0x0000000000000000000000000000000000000000";
+const PLATFORM_TOKEN_ADDRESS =
+  process.env.NEXT_PUBLIC_PLATFORM_TOKEN_ADDRESS ?? "0x0000000000000000000000000000000000000000";
+const TX_CONTROLLER_ADDRESS =
+  process.env.NEXT_PUBLIC_TX_CONTROLLER_ADDRESS ?? "0x0000000000000000000000000000000000000000";
 
 const identityRegistryAbi = [
-  "function isCertified(address user) view returns (bool)",
-  "function certify(address user) external",
+  "function users(address) view returns (bool isVerified, uint256 totalVolume, uint256 riskScore)",
+  "function isUserVerified(address user) view returns (bool)",
+  "function register(bytes signature) external",
+  "function updateVolume(address user, uint256 amount) external",
 ];
 
-const hybridBankAbi = [
-  "function smallTransfer(address to, uint256 amount) external returns (bool)",
-  "function largeTransfer(address to, uint256 amount) external returns (bool)",
+const platformTokenAbi = [
+  "function transfer(address to, uint256 amount) returns (bool)",
+  "function balanceOf(address) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+  "function symbol() view returns (string)",
+  "function transactionThreshold() view returns (uint256)",
+];
+
+const controllerAbi = [
+  "function txCounter() view returns (uint256)",
+  "function transactions(uint256) view returns (address from, address to, uint256 amount, bool approved, bool executed)",
+  "function approveTransaction(uint256 txId) external",
+  "function rejectTransaction(uint256 txId) external",
 ];
 
 function getEthereum(): (EthereumLike & {
@@ -50,43 +72,114 @@ async function getSigner(): Promise<JsonRpcSigner> {
   return provider.getSigner();
 }
 
-export async function readCertificationStatus(address: string) {
+export async function readUserProfile(address: string) {
   const provider = await getBrowserProvider();
-  const registry = new Contract(
-    IDENTITY_REGISTRY_ADDRESS,
-    identityRegistryAbi,
-    provider
+  const registry = new Contract(IDENTITY_REGISTRY_ADDRESS, identityRegistryAbi, provider);
+  const [isVerified, totalVolume, riskScore] = await registry.users(address);
+  return { isVerified, totalVolume, riskScore } as {
+    isVerified: boolean;
+    totalVolume: bigint;
+    riskScore: bigint;
+  };
+}
+
+export async function registerWithSignature(signature: string) {
+  const signer = await getSigner();
+  const registry = new Contract(IDENTITY_REGISTRY_ADDRESS, identityRegistryAbi, signer);
+  const tx = await registry.register(signature);
+  return tx.wait();
+}
+
+export async function fetchTokenMeta() {
+  const provider = await getBrowserProvider();
+  const token = new Contract(PLATFORM_TOKEN_ADDRESS, platformTokenAbi, provider);
+  const [decimals, symbol, threshold] = await Promise.all([
+    token.decimals(),
+    token.symbol(),
+    token.transactionThreshold(),
+  ]);
+  return { decimals, symbol, threshold } as { decimals: number; symbol: string; threshold: bigint };
+}
+
+export async function fetchBalance(address: string) {
+  const provider = await getBrowserProvider();
+  const token = new Contract(PLATFORM_TOKEN_ADDRESS, platformTokenAbi, provider);
+  return token.balanceOf(address) as Promise<bigint>;
+}
+
+export async function submitTokenTransfer(to: string, amount: string, decimals: number) {
+  const signer = await getSigner();
+  const token = new Contract(PLATFORM_TOKEN_ADDRESS, platformTokenAbi, signer);
+  const parsed = parseUnits(amount, decimals);
+  const tx = await token.transfer(to, parsed);
+  const receipt = await tx.wait();
+  return { receipt, parsed } as { receipt: any; parsed: bigint };
+}
+
+export async function fetchTxCounter() {
+  const provider = await getBrowserProvider();
+  const controller = new Contract(TX_CONTROLLER_ADDRESS, controllerAbi, provider);
+  return controller.txCounter() as Promise<bigint>;
+}
+
+export type ControllerTx = {
+  id: bigint;
+  from: string;
+  to: string;
+  amount: bigint;
+  approved: boolean;
+  executed: boolean;
+};
+
+export async function fetchTransaction(id: bigint): Promise<ControllerTx> {
+  const provider = await getBrowserProvider();
+  const controller = new Contract(TX_CONTROLLER_ADDRESS, controllerAbi, provider);
+  const txn = await controller.transactions(id);
+  return {
+    id,
+    from: txn[0],
+    to: txn[1],
+    amount: txn[2],
+    approved: txn[3],
+    executed: txn[4],
+  };
+}
+
+export async function fetchRecentTransactions(limit = 20): Promise<ControllerTx[]> {
+  const counter = await fetchTxCounter();
+  const total = Number(counter);
+  if (total === 0) return [];
+  const start = Math.max(1, total - limit + 1);
+  const ids = Array.from({ length: total - start + 1 }, (_, idx) => BigInt(start + idx));
+  const provider = await getBrowserProvider();
+  const controller = new Contract(TX_CONTROLLER_ADDRESS, controllerAbi, provider);
+  const results = await Promise.all(
+    ids.map(async (id) => {
+      const txn = await controller.transactions(id);
+      return {
+        id,
+        from: txn[0],
+        to: txn[1],
+        amount: txn[2],
+        approved: txn[3],
+        executed: txn[4],
+      } as ControllerTx;
+    })
   );
-  return registry.isCertified(address) as Promise<boolean>;
+  return results.reverse();
 }
 
-export async function certifyUser(userAddress: string) {
+export async function approvePendingTransaction(txId: bigint) {
   const signer = await getSigner();
-  const registry = new Contract(IDENTITY_REGISTRY_ADDRESS, identityRegistryAbi, signer);
-  const tx = await registry.certify(userAddress);
+  const controller = new Contract(TX_CONTROLLER_ADDRESS, controllerAbi, signer);
+  const tx = await controller.approveTransaction(txId);
   return tx.wait();
 }
 
-export async function submitSmallTransfer(to: string, amountEth: string) {
+export async function rejectPendingTransaction(txId: bigint) {
   const signer = await getSigner();
-  const bank = new Contract(HYBRID_BANK_ADDRESS, hybridBankAbi, signer);
-  const tx = await bank.smallTransfer(to, parseEther(amountEth));
-  return tx.wait();
-}
-
-export async function submitLargeTransfer(to: string, amountEth: string) {
-  const signer = await getSigner();
-  const sender = await signer.getAddress();
-  const registry = new Contract(IDENTITY_REGISTRY_ADDRESS, identityRegistryAbi, signer);
-  const isCertified = await registry.isCertified(sender);
-  if (!isCertified) {
-    const error = new Error("USER_NOT_CERTIFIED");
-    error.name = "ComplianceError";
-    throw error;
-  }
-
-  const bank = new Contract(HYBRID_BANK_ADDRESS, hybridBankAbi, signer);
-  const tx = await bank.largeTransfer(to, parseEther(amountEth));
+  const controller = new Contract(TX_CONTROLLER_ADDRESS, controllerAbi, signer);
+  const tx = await controller.rejectTransaction(txId);
   return tx.wait();
 }
 
@@ -126,13 +219,20 @@ export async function requestAccounts(): Promise<string[]> {
 
 export function deriveWalletFlags(account: string | null, chainId: number | null) {
   const isAuthority = Boolean(account && AUTHORITY_ADDRESS && account.toLowerCase() === AUTHORITY_ADDRESS);
+  const isModerator = Boolean(account && MODERATOR_ADDRESS && account.toLowerCase() === MODERATOR_ADDRESS);
   const isCorrectNetwork = chainId === REQUIRED_CHAIN_ID;
-  return { isAuthority, isCorrectNetwork };
+  return { isAuthority, isModerator, isCorrectNetwork };
 }
 
 export const contractConfig = {
   REQUIRED_CHAIN_ID,
   AUTHORITY_ADDRESS,
+  MODERATOR_ADDRESS,
   IDENTITY_REGISTRY_ADDRESS,
-  HYBRID_BANK_ADDRESS,
+  PLATFORM_TOKEN_ADDRESS,
+  TX_CONTROLLER_ADDRESS,
 };
+
+export function formatAmount(amount: bigint, decimals: number, fractionDigits = 4) {
+  return Number.parseFloat(formatUnits(amount, decimals)).toFixed(fractionDigits);
+}

@@ -4,8 +4,9 @@ import { motion } from "framer-motion";
 import { Header } from "@/components/layout/Header";
 import { Copy, Plus, Send, Activity, History, ShieldAlert, BadgeCheck } from "lucide-react";
 import { PremiumButton } from "@/components/ui/PremiumButton";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useWeb3 } from "@/context/Web3Context";
+import { useRouter } from "next/navigation";
 
 const MOCK_TRANSACTIONS = [
     { id: "0x3f...", amount: "45,000.00 USDC", type: "Incoming", date: "2 mins ago", status: "Verified" },
@@ -15,13 +16,26 @@ const MOCK_TRANSACTIONS = [
 ];
 
 export default function Dashboard() {
+    const router = useRouter();
     const [amount, setAmount] = useState("");
     const { account } = useWeb3();
+
+    const [isMounted, setIsMounted] = useState(false);
+
+    useEffect(() => {
+        setIsMounted(true);
+        const isAuth = localStorage.getItem("isAuthenticated");
+        if (!isAuth) {
+            router.push("/login");
+        }
+    }, [router]);
 
     const formatAddress = (addr: string) => {
         if (!addr) return "";
         return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
     };
+
+    if (!isMounted) return null;
 
     return (
         <main className="min-h-screen bg-app-black pt-28 pb-20 selection:bg-app-white selection:text-app-black">
