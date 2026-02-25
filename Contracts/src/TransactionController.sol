@@ -2,11 +2,17 @@
 pragma solidity ^0.8.20;
 
 interface IPlatformToken {
-    function executeTransfer(address from, address to, uint256 amount) external;
+    function executeTransfer(
+        address from,
+        address to,
+        address recipient,
+        uint256 amount
+    ) external;
+
+    function cancelTransfer(address from, uint256 amount) external;
 }
 
 contract TransactionController {
-
     struct PendingTransaction {
         address from;
         address to;
@@ -45,7 +51,6 @@ contract TransactionController {
         address to,
         uint256 amount
     ) external onlyToken returns (uint256) {
-
         txCounter++;
 
         transactions[txCounter] = PendingTransaction({
@@ -60,14 +65,18 @@ contract TransactionController {
     }
 
     function approveTransaction(uint256 txId) external onlyModerator {
-
         PendingTransaction storage txn = transactions[txId];
         require(!txn.executed, "Already executed");
 
         txn.approved = true;
         txn.executed = true;
 
-        IPlatformToken(token).executeTransfer(txn.from, txn.to, txn.amount);
+        IPlatformToken(token).executeTransfer(
+            txn.from,
+            address(this),
+            txn.to,
+            txn.amount
+        );
     }
 
     function rejectTransaction(uint256 txId) external onlyModerator {
@@ -75,5 +84,7 @@ contract TransactionController {
         require(!txn.executed, "Already executed");
 
         txn.executed = true;
+
+        IPlatformToken(token).cancelTransfer(txn.from, txn.amount);
     }
 }
