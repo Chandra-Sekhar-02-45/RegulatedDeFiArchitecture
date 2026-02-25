@@ -4,7 +4,10 @@ import {
   Eip1193Provider,
   JsonRpcSigner,
   formatUnits,
+  hashMessage,
+  recoverAddress,
   parseUnits,
+  solidityPackedKeccak256,
 } from "ethers";
 
 export type EthereumLike = Eip1193Provider & {
@@ -181,6 +184,23 @@ export async function rejectPendingTransaction(txId: bigint) {
   const controller = new Contract(TX_CONTROLLER_ADDRESS, controllerAbi, signer);
   const tx = await controller.rejectTransaction(txId);
   return tx.wait();
+}
+
+// Registration helpers (must mirror IdentityRegistry.sol logic)
+export function registrationDigest(user: string) {
+  return solidityPackedKeccak256(["address"], [user]);
+}
+
+export function registrationEthSignedMessage(user: string) {
+  const digest = registrationDigest(user);
+  return hashMessage(digest);
+}
+
+export function verifyGovernmentSignatureLocal(user: string, signature: string) {
+  if (!signature) return false;
+  const signedHash = registrationEthSignedMessage(user);
+  const recovered = recoverAddress(signedHash, signature);
+  return recovered.toLowerCase() === AUTHORITY_ADDRESS;
 }
 
 export async function switchToRequiredNetwork() {

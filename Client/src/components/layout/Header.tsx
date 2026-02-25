@@ -112,6 +112,9 @@ export function Header() {
                     <Link href="/dashboard" className="hover:text-app-white transition-colors">
                         Dashboard
                     </Link>
+                    <Link href="/profile" className="hover:text-app-white transition-colors">
+                        Profile
+                    </Link>
                     <Link href="/authority" className="hover:text-app-white transition-colors">
                         Authority
                     </Link>
